@@ -1,0 +1,31 @@
+{
+  "source": "workbuddy desktop app.asar -> packages/agent-ui/src/utils/keyboard-shortcuts/shortcut-constants.ts (SHORTCUT_DEFINITIONS)",
+  "captured_from_version_file_date": "2026-10-24",
+  "storage": {
+    "type": "renderer localStorage",
+    "key": "agent-ui-keyboard-shortcuts",
+    "shape": { "version": 1, "overrides": { "<shortcut-id>": { "mac": "<binding>", "win": "<binding>" } } },
+    "cloud": { "endpoint": "/console/as/users/private-configs", "namespace": "keyboard-shortcuts", "key": "overrides" },
+    "sync_rule": "cloud-as-source-of-truth: 云端存在 overrides 时覆盖本地；云端为空时把本地 overrides 上传"
+  },
+  "shortcuts": [
+    { "id": "open-settings", "labelEn": "Open settings", "labelZh": "打开设置", "category": "window", "scope": "app", "defaultMac": "Meta+,", "defaultWin": "Ctrl+,", "editable": true },
+    { "id": "toggle-voice-recording", "labelEn": "Toggle voice recording", "labelZh": "语音输入", "category": "editing", "scope": "app", "defaultMac": "Meta+D", "defaultWin": "Ctrl+D", "editable": true },
+    { "id": "search-in-conversation", "labelEn": "Search in conversation", "labelZh": "会话内搜索", "category": "editing", "scope": "app", "defaultMac": "Meta+F", "defaultWin": "Ctrl+F", "editable": true },
+    { "id": "send-message", "labelEn": "Send message", "labelZh": "发送消息", "category": "editing", "scope": "context", "defaultMac": "Enter", "defaultWin": "Enter", "editable": true },
+    { "id": "newline", "labelEn": "New line", "labelZh": "换行", "category": "editing", "scope": "context", "defaultMac": "Shift+Enter", "defaultWin": "Shift+Enter", "editable": true },
+    { "id": "new-conversation", "labelEn": "New conversation", "labelZh": "新建会话", "category": "window", "scope": "app", "defaultMac": "Meta+N", "defaultWin": "Ctrl+N", "editable": true },
+    { "id": "stop-generation", "labelEn": "Stop generation", "labelZh": "停止生成", "category": "editing", "scope": "context", "defaultMac": "Escape", "defaultWin": "Escape", "editable": true },
+    { "id": "prev-task", "labelEn": "Previous task", "labelZh": "上一个任务", "category": "navigation", "scope": "app", "defaultMac": "Meta+[", "defaultWin": "Ctrl+[", "editable": true },
+    { "id": "next-task", "labelEn": "Next task", "labelZh": "下一个任务", "category": "navigation", "scope": "app", "defaultMac": "Meta+]", "defaultWin": "Ctrl+]", "editable": true },
+    { "id": "toggle-sidebar", "labelEn": "Toggle sidebar", "labelZh": "显示/隐藏侧边栏", "category": "window", "scope": "app", "defaultMac": "Meta+B", "defaultWin": "Ctrl+B", "editable": true },
+    { "id": "toggle-artifacts", "labelEn": "Toggle artifacts panel", "labelZh": "显示/隐藏结果区", "category": "window", "scope": "app", "defaultMac": "Meta+Shift+B", "defaultWin": "Ctrl+Shift+B", "editable": true },
+    { "id": "toggle-fullscreen", "labelEn": "Toggle fullscreen", "labelZh": "全屏切换", "category": "window", "scope": "app", "defaultMac": "Ctrl+Meta+F", "defaultWin": "F11", "editable": true },
+    { "id": "toggle-window", "labelEn": "Toggle window (global)", "labelZh": "全局唤醒窗口", "category": "window", "scope": "global", "defaultMac": "Shift+Alt+W", "defaultWin": "Shift+Alt+W", "editable": true },
+    { "id": "font-size-increase", "labelEn": "Increase font size", "labelZh": "增大字号", "category": "general", "scope": "app", "defaultMac": "Meta+=", "defaultWin": "Ctrl+=", "editable": false },
+    { "id": "font-size-decrease", "labelEn": "Decrease font size", "labelZh": "减小字号", "category": "general", "scope": "app", "defaultMac": "Meta+-", "defaultWin": "Ctrl+-", "editable": false },
+    { "id": "font-size-reset", "labelEn": "Reset font size", "labelZh": "重置字号", "category": "general", "scope": "app", "defaultMac": "Meta+0", "defaultWin": "Ctrl+0", "editable": false },
+    { "id": "trigger-picker", "labelEn": "Trigger context picker", "labelZh": "唤起 @ 引用", "category": "editing", "scope": "context", "defaultMac": "@", "defaultWin": "@", "editable": false },
+    { "id": "trigger-slash-command", "labelEn": "Trigger slash command", "labelZh": "唤起 / 命令", "category": "editing", "scope": "context", "defaultMac": "/", "defaultWin": "/", "editable": false }
+  ]
+}
