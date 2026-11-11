@@ -1,0 +1,148 @@
+
+[2026-11-03 15:15:03.786]
+RX：ver_work_st:2->20
+[BLE_HOGP]server_state: 00,20 [BLE_HOGP]ble_state:02===>20 [Info] [HID_KEY]hidkey_hogp_ble_status_callback============== 20   reason:0x0
+adv_type= 0 00 00 00 00 00 00 00 adv_type= 0 	>>>>> ble_power :7[Info] [rf_controller]rf_controller
+[Info] [rc_led]bt_led_mode =2
++LE Connection_complete (status=0) type 1, 48:44:45:62:9E:72New connection: handle 80, 48:44:45:62:9E:72[Info] [GATT_SERVER]HCI_SUBEVENT_LE_CONNECTION_COMPLETE:conn_handle= 0050,rssi= 0
+[Info] [GATT_SERVER]conn_interval = 39
+[Info] [GATT_SERVER]conn_latency = 0
+[Info] [GATT_SERVER]conn_timeout = 500
+[Info] [RCSP_BT]------RCSP_BLE-----
+[Info] [RCSP_BT]----0x401bbdc   0x401b29e   0x401b308  0x401b316
+[Info] [RCSP_PROTOCAL]===callback:0x401705c
+[Info] [RCSP_BT]JL_ble_status_callback=========%-=========== 3
+[BLE_HOGP]server_state: 50,03 [BLE_HOGP]ble_state:20===>03 [Info] [HID_KEY]hidkey_hogp_ble_status_callback============== 03   reason:0x0
+[Info] [HID_KEY
+[2026-11-03 15:15:03.803]
+RX：]BLE_ST_CONNECT
+	>>>>> ble_power :7[Info] [HID_KEY]write ble mode
+[Info] [RCSP_BT]JL_ble_status_callback==================== 2
+[Info] [GATT_SERVER]server_work_st:20->2
+[BP] t=4114 CONNECTION_COMPLETE n=1 a=50 b=0 r=0[BLE_HOGP]connection_handle:0050, rssi= -28 [BLE_HOGP]peer_address_info: 01 48 44 45 62 9E 72 [BLE_HOGP]con_interval = 39 [BLE_HOGP]con_latency = 0 [BLE_HOGP]cnn_timeout = 500 
+[2026-11-03 15:15:03.991]
+RX：##T[Info] [GATT_COMM]Event_Type:d0,packet_address:03f023fc
+D0 0E 50 00 01 48 44 45 62 9E 72 00 50 00 00 00 [Info] [GATT_COMM]just_handle=0050,type= 0
+[Info] [GATT_SERVER]first pair, 0050->Just Works Confirmed.
+[BLE_HOGP]ble_state:03===>f0 [Info] [HID_KEY]hidkey_hogp_ble_status_callback============== f0   reason:0x0
+[Info] [HID_KEY]BLE_PRIV_MSG_PAIR_CONFIRM
+
+[2026-11-03 15:15:05.336]
+RX：#
+[2026-11-03 15:15:06.372]
+RX：#
+[2026-11-03 15:15:06.421]
+RX：+
+[2026-11-03 15:15:06.466]
+RX：-
+[2026-11-03 15:15:07.407]
+RX：#
+[2026-11-03 15:15:07.893]
+RX：[Info] [GATT_COMM]just_handle=0050,type= 0
+[Info] [GATT_COMM]HCI_EVENT_ENCRYPTION_CHANGE= 0,handle= 0050
+[Info] [GATT_SERVER]HCI_EVENT_ENCRYPTION_CHANGE= 0, 0050
+[BP] t=8196 ENCRYPTION_CHANGE n=2 a=50 b=0 r=0[BLE_HOGP]ENCRYPTION_CHANGE:handle=0050,state=0,process =01 [BLE_HOGP]first pair... [BLE_HOGP]-hogp_pair_info vm_do:1 5C B3 01 00 01 48 44 45 62 9E 72 00 B3 5C [BLE_HOGP]ble_state:f0===>f1 [Info] [HID_KEY]hidkey_hogp_ble_status_callback============== f1   reason:0x1
+[Info] [HID_KEY]BLE_PRIV_PAIR_ENCRYPTION_CHANGE
+
+[2026-11-03 15:15:07.986]
+RX：[Info] [GATT_COMM]just_handle=0050,type= 0
+[Info] [GATT_SERVER]handle= 50, ATT_MTU= 141,payload= 138
+[BLE_HOGP]ATT MTU 
+[2026-11-03 15:15:08.109]
+RX：[Info] [GATT_COMM]Event_Type:df,packet_address:03f02468
+DF 0E 50 00 01 48 44 45 62 9E 72 10 00 00 00 00 [Info] [GATT_COMM]just_handle=0050,type= 0
+[Info] [GATT_SERVER]0050->===Pair_process,sub= 10
+10 00 00 00 [Info] [GATT_SERVER]first pair,add list success
+
+[2026-11-03 15:15:08.764]
+RX：#
+[2026-11-03 15:15:08.827]
+RX：[Info] [GATT_COMM]just_handle=0050,type= 0
+[Info] [GATT_SERVER]conn_update_handle   = 0050
+[Info] [GATT_SERVER]conn_update_interval = 6
+[Info] [GATT_SERVER]conn_update_latency  = 0
+[Info] [GATT_SERVER]conn_update_timeout  = 500
+[BP] t=9048 CONNECTION_UPDATE_COMPLETE n=3 a=50 b=0 r=0[BLE_HOGP]conn_param update_complete:0050 [BLE_HOGP]update_interval = 6 [BLE_HOGP]update_latency = 0 [BLE_HOGP]update_timeout = 500 [BP] t=9096 ATT_WRITE n=1 a=b b=2 r=0[BLE_HOGP]write_callback, handle= 0x000b,size = 2 [Info] [RCSP_BT]JL_ble_status_callback==================== 33
+[BLE_HOGP]server_state: 50,21 [BLE_HOGP]ble_state:f1===>21 [Info] [HID_KEY]hidkey_hogp_ble_status_callback============== 21   reason:0x50
+[Info] [HID_KEY]BLE_ST_NOTIFY_IDICATE
+[Info] [audio_enc]atv_remote_protocol_deal
+[Info] [audio_enc]AUDIO_GOOGLE_CMD_CAP
+0B 00 04 00 02 00 86 00 86 [Info] [GATT_COMM]ret:-93,len= 9
+
+[2026-11-03 15:15:08.843]
+RX：[Info] [rc_led]bt_led_mode =0
+
+[2026-11-03 15:15:09.156]
+RX：+-
+[2026-11-03 15:15:09.266]
+RX：S
+[2026-11-03 15:15:09.421]
+RX：#
+[2026-11-03 15:15:09.611]
+RX：S#[BP] t=9856 ATT_READ n=1 a=1e b=0 r=0[BLE_HOGP]read_callback, handle= 0x001e,buffer= 00000000,offset= 0000 [BLE_HOGP]read PnP_ID [BLE_HOGP]att_value_len= 7 [BLE_HOGP]read_callback, handle= 0x001e,buffer= 03f05a40,offset= 0000 [BLE_HOGP]read PnP_ID [BLE_HOGP]att_value_len= 7 [Info] [GATT_COMM]just_handle=0050,type= 0
+[Info] [GATT_SERVER]conn_update_handle   = 0050
+[Info] [GATT_SERVER]conn_update_interval = 39
+[Info] [GATT_SERVER]conn_update_latency  = 0
+[Info] [GATT_SERVER]conn_update_timeout  = 500
+[BP] t=9860 CONNECTION_UPDATE_COMPLETE n=4 a=50 b=0 r=0[BLE_HOGP]conn_param update_complete:0050 [BLE_HOGP]update_interval = 39 [BLE_HOGP]update_latency = 0 [BLE_HOGP]update_timeout = 500 S
+[2026-11-03 15:15:09.627]
+RX：>
+[2026-11-03 15:15:09.705]
+RX：[]S>[][BLE_HOGP]read_callback, handle= 0x0007,buffer= 00000000,offset= 0000 [BLE_HOGP]att_value_len= 8 [BLE_HOGP]read_callback, handle= 0x0007,buffer= 03f05a3d,offset= 0000 [BLE_HOGP]------get Peripheral_Preferred_Connection_Parameters [BLE_HOGP]att_value_len= 8 S
+[2026-11-03 15:15:09.721]
+RX：>
+[2026-11-03 15:15:09.736]
+RX：[]S
+[2026-11-03 15:15:09.783]
+RX：>[]
+[2026-11-03 15:15:09.859]
+RX：[BLE_HOGP]read_callback, handle= 0x0021,buffer= 00000000,offset= 0000 [BLE_HOGP]att_value_len= 1 [BLE_HOGP]read_callback, handle= 0x0021,buffer= 03f05a3d,offset= 0000 [BLE_HOGP]read vbat:86 [BLE_HOGP]att_value_len= 1 S>[]S
+[2026-11-03 15:15:09.876]
+RX：>[]
+[2026-11-03 15:15:09.939]
+RX：S>[]S
+[2026-11-03 15:15:09.986]
+RX：>[]S
+[2026-11-03 15:15:10.034]
+RX：>[]
+[2026-11-03 15:15:10.080]
+RX：#
+[2026-11-03 15:15:10.096]
+RX：[Info] [GATT_COMM]just_handle=0050,type= 0
+[Info] [GATT_SERVER]conn_update_handle   = 0050
+[Info] [GATT_SERVER]conn_update_interval = 9
+[Info] [GATT_SERVER]conn_update_latency  = 69
+[Info] [GATT_SERVER]conn_update_timeout  = 300
+[BP] t=10352 CONNECTION_UPDATE_COMPLETE n=5 a=50 b=0 r=0[BLE_HOGP]conn_param update_complete:0050 [BLE_HOGP]update_interval = 9 [BLE_HOGP]update_latency = 69 [BLE_HOGP]update_timeout = 300 
+[2026-11-03 15:15:10.222]
+RX：[BP] t=10482 ATT_READ n=7 a=46 b=0 r=0[BLE_HOGP]read_callback, handle= 0x0046,buffer= 00000000,offset= 0000 [BLE_HOGP]att_value_len= 169 [BLE_HOGP]read_callback, handle= 0x0046,buffer= 03f05a3d,offset= 0000 [BLE_HOGP]att_value_len= 140 
+[2026-11-03 15:15:10.238]
+RX：[BLE_HOGP]read_callback, handle= 0x0046,buffer= 00000000,offset= 0000 [BLE_HOGP]att_value_len= 169 [BLE_HOGP]read_callback, handle= 0x0046,buffer= 03f05a3d,offset= 008c [BLE_HOGP]att_value_len= 29 
+[2026-11-03 15:15:10.286]
+RX：[BLE_HOGP]read_callback, handle= 0x004b,buffer= 00000000,offset= 0000 [BLE_HOGP]att_value_len= 4 [BLE_HOGP]read_callback, handle= 0x004b,buffer= 03f05a3d,offset= 0000 [BLE_HOGP]att_value_len= 4 [BP] t=10542 ATT_WRITE n=2 a=28 b=2 r=0[BLE_HOGP]write_callback, handle= 0x0028,size = 2 [Info] [GATT_SERVER]connection_update_request: 0050: -6-9-69-300-
+[BP] t=10542 LAT_CCC n=6 a=28 b=3 r=0[BLE_HOGP]------write ccc:0028,01 
+[2026-11-03 15:15:10.302]
+RX：[Info] [GATT_COMM]just_handle=0050,type= 0
+[Info] [GATT_SERVER]-update_rsp:0050, 00
+[Info] [GATT_SERVER]remoter accept 
+[BLE_HOGP]ATT MTU [BLE_HOGP]write_callback, handle= 0x002c,size = 2 [BP] t=10566 LAT_CCC n=7 a=2c b=3 r=0[BLE_HOGP]------write cc
+[2026-11-03 15:15:10.348]
+RX：c:002c,01 [BLE_HOGP]write_callback, handle= 0x0033,size = 2 [BP] t=10586 LAT_CCC n=8 a=33 b=3 r=0[BLE_HOGP]------write ccc:0033,01 
+[2026-11-03 15:15:10.363]
+RX：[BLE_HOGP]write_callback, handle= 0x0037,size = 2 [BP] t=10608 LAT_CCC n=9 a=37 b=3 r=0[BLE_HOGP]------write ccc:0037,01 
+[2026-11-03 15:15:10.425]
+RX：[BLE_HOGP]write_callback, handle= 0x003b,size = 2 [BP] t=10630 LAT_CCC n=10 a=3b b=3 r=0[BLE_HOGP]------write ccc:003b,01 S[BLE_HOGP]write_callback, handle= 0x0043,size = 2 [BP] t=10662 LAT_CCC n=11 a=43 b=3 r=0[BLE_HOGP]------write ccc:0043,01 [BLE_HOGP]write_callback, handle
+[2026-11-03 15:15:10.457]
+RX：= 0x0049,size = 2 S
+[2026-11-03 15:15:10.486]
+RX：>[]S
+[2026-11-03 15:15:11.258]
+RX：>
+[2026-11-03 15:15:12.035]
+RX：[]S>
+[2026-11-03 15:15:12.050]
+RX：[]S
+[2026-11-03 15:15:12.848]
+RX：>[]S
+[2026-11-03 15:15:13.627]
+RX：>[]S

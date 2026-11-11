@@ -15,3 +15,10 @@ description: 通过 WB-SC 向 USB Dongle 转发遥控器改键、整机配置重
 - **点灯、枚举或查询** → `led send`、`led list` 或 `remote info`。
 - **首次安装或修复 Hook** → 按 [安装流程](references/hook-events.md) 执行，包含提前授权、安装验收和简短回复。排障用 `remote doctor`，卸载用 `remote uninstall --yes`。
 - **核对支持的事件、安装生效或联调** → 读 [WorkBuddy Hook 事件](references/hook-events.md)。
+
+## 改键后的回复
+
+- 默认只用一句话说明按键和改后的功能，例如：“已将 S1 改为 Ctrl+D。”多个按键可合并为一句，或每键一行。
+- 隐藏命令、协议、键码、参数、JSON、回执字段、文件路径及执行过程；仅在用户明确追问时展开技术细节。
+- 仍按真实回执判断结果；失败或结果未知时只简短说明原因及必要的下一步，不将发送成功当作保存成功。
+- 不追加总结、测试清单、通用提醒或无关说明。
