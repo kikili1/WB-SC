@@ -17,6 +17,47 @@ import remote_setup as setup
 import status_hook as hook
 import vendor_info
 import wbsc
+import key_push
+
+
+class ResetTests(unittest.TestCase):
+    def args(self, yes=True):
+        return SimpleNamespace(yes=yes, json=True, timeout=0.2, vid=0x1915, pid=0x1025, path=None)
+
+    def test_preview_never_opens_device(self):
+        with patch.object(led, 'native') as native, contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(key_push.reset(self.args(False)), 0)
+        native.assert_not_called()
+        result = json.loads(out.getvalue())
+        self.assertEqual(result['outcome'], 'preview')
+        packet = bytes.fromhex(result['tx'])
+        self.assertEqual(packet, bytes((5, 0x44, 2, 1, result['token'])))
+
+    def test_only_matching_execution_result_is_accepted(self):
+        for status in range(4):
+            with self.subTest(status=status):
+                api = MagicMock()
+                read = api.open_reader.return_value.__enter__.return_value
+                read.side_effect = [bytes((8, 0xAA)) + bytes(15),
+                                    bytes((8, 0x44, 8, 0)) + bytes(13),
+                                    bytes((8, 0x44, 7, status)) + bytes(13)]
+                with patch.object(led, 'native', return_value=api), \
+                        patch.object(key_push, 'find_device', return_value=object()), \
+                        patch.object(key_push.secrets, 'randbelow', return_value=7), \
+                        contextlib.redirect_stdout(io.StringIO()) as out:
+                    self.assertEqual(key_push.reset(self.args()), int(status != 0))
+                self.assertEqual(json.loads(out.getvalue())['status'], status)
+                api.write_report.assert_called_once()
+
+    def test_timeout_is_unknown_without_retry(self):
+        api = MagicMock()
+        api.open_reader.return_value.__enter__.return_value.return_value = None
+        with patch.object(led, 'native', return_value=api), \
+                patch.object(key_push, 'find_device', return_value=object()), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(key_push.reset(self.args()), 1)
+        self.assertEqual(json.loads(out.getvalue())['outcome'], 'unknown')
+        api.write_report.assert_called_once()
 
 
 class RemoteTests(unittest.TestCase):

@@ -35,7 +35,7 @@ def find_device(api, args):
     return found[0]
 
 
-def wait_ack(read, token, timeout):
+def wait_ack(read, token, timeout, command=0x39):
     """读取回执里的 status；超时返回 None。"""
     deadline = time.monotonic() + timeout
     while True:
@@ -45,7 +45,7 @@ def wait_ack(read, token, timeout):
         data = read(remain)
         if not data:
             return None
-        if (len(data) >= 17 and data[:3] == bytes((0x08, 0x39, token))
+        if (len(data) >= 17 and data[:3] == bytes((0x08, command, token))
                 and data[3] in STATUS_TEXT and not any(data[4:])):
             return data[3]
 
@@ -71,6 +71,55 @@ def resolve_target(args, keys):
     if not args.key:
         raise ValueError('请用 --key 指定目标键值，或用 --restore 恢复出厂值')
     return col, row, keymap_rc.parse_key(args.key), label
+
+
+def reset(args):
+    """0x44 弃用全部主机覆盖；不重试，以免重启后重复操作。"""
+    attempted = False
+    result = {}
+    try:
+        if not math.isfinite(args.timeout) or not 0 < args.timeout <= 60:
+            raise ValueError('超时必须在 0~60 秒之间')
+        token = secrets.randbelow(256)
+        packet = bytes((0x05, 0x44, 0x02, 0x01, token))
+        result.update(token=token, tx=packet.hex(' ').upper())
+        if not args.yes:
+            result.update(outcome='preview', message='预览：弃用全部主机覆盖并重启，保留红外学习和配对记录')
+            code = 0
+        else:
+            api = receiver_led.native()
+            device = find_device(api, args)
+            with api.open_reader(device) as read:
+                attempted = True
+                deadline = time.monotonic() + args.timeout
+                api.write_report(device, packet, args.timeout)
+                status = wait_ack(read, token, deadline - time.monotonic(), command=0x44)
+            if status is None:
+                result.update(outcome='unknown', message='未收到有效执行回执，弃用结果未知；不自动重发')
+                code = 1
+            else:
+                outcomes = ('discarded', 'rejected', 'save_failed', 'forward_failed')
+                messages = ('全部主机覆盖已弃用，遥控器将重启；保留红外学习和配对记录',
+                            '命令格式或协议版本不支持', '弃用状态保存失败', '遥控器未连接或转发失败')
+                result.update(status=status, outcome=outcomes[status], message=messages[status])
+                code = int(status != 0)
+    except (OSError, ValueError) as exc:
+        result.update(outcome='unknown' if attempted else 'error', message=str(exc))
+        code = 1
+    print(json.dumps(result, ensure_ascii=False) if args.json else result['message'])
+    return code
+
+
+def configure_reset(sub):
+    p = sub.add_parser('reset', help='弃用全部主机覆盖并重启，保留红外学习和配对记录（0x44）')
+    vid, pid, path = receiver_led.device_defaults()
+    p.add_argument('--vid', type=receiver_led.hex_id, default=vid)
+    p.add_argument('--pid', type=receiver_led.hex_id, default=pid)
+    p.add_argument('--path', default=path)
+    p.add_argument('--timeout', type=float, default=3)
+    p.add_argument('--yes', action='store_true', help='真正发送（否则预览）')
+    p.add_argument('--json', action='store_true')
+    p.set_defaults(func=reset)
 
 
 def execute(args):
