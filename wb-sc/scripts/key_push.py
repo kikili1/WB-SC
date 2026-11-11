@@ -84,7 +84,7 @@ def reset(args):
         packet = bytes((0x05, 0x44, 0x02, 0x01, token))
         result.update(token=token, tx=packet.hex(' ').upper())
         if not args.yes:
-            result.update(outcome='preview', message='预览：弃用全部主机覆盖并重启，保留红外学习和配对记录')
+            result.update(outcome='preview', message='预览：弃用整张自定义改键 map 并重启')
             code = 0
         else:
             api = receiver_led.native()
@@ -99,7 +99,7 @@ def reset(args):
                 code = 1
             else:
                 outcomes = ('discarded', 'rejected', 'save_failed', 'forward_failed')
-                messages = ('全部主机覆盖已弃用，遥控器将重启；保留红外学习和配对记录',
+                messages = ('自定义改键 map 已弃用，遥控器将重启',
                             '命令格式或协议版本不支持', '弃用状态保存失败', '遥控器未连接或转发失败')
                 result.update(status=status, outcome=outcomes[status], message=messages[status])
                 code = int(status != 0)
@@ -111,7 +111,7 @@ def reset(args):
 
 
 def configure_reset(sub):
-    p = sub.add_parser('reset', help='弃用全部主机覆盖并重启，保留红外学习和配对记录（0x44）')
+    p = sub.add_parser('reset', help='恢复出厂：弃用自定义改键 map 并重启（0x44）')
     vid, pid, path = receiver_led.device_defaults()
     p.add_argument('--vid', type=receiver_led.hex_id, default=vid)
     p.add_argument('--pid', type=receiver_led.hex_id, default=pid)

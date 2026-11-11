@@ -244,8 +244,6 @@ def operate(action, yes=False, home=None, source=None):
                 atomic(path, snapshots[path])
         raise
     print('%s completed. Receiver config: %s' % (action, root / 'config.json'))
-    if action == 'install':
-        print('Start a new WorkBuddy session to load hooks. If it still uses old settings, restart WorkBuddy manually.')
 
 
 def doctor(home=None, probe=False):

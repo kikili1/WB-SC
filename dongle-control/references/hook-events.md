@@ -5,8 +5,19 @@ WB-SC 管理 Windows WorkBuddy 用户设置 `~/.workbuddy/settings.json` 中自�
 ## 安装流程与回复
 
 1. 安装前只简述 skill 用途和权限需求，省略计划与进度播报。用 `remote status` 检查，`ready=true` 时跳过重装；否则用 `remote install` 预览。
-2. 正式执行 `remote install --yes` 前，若目标超出可写范围，直接通过工具为完整安装申请权限，说明将写入 `~/.workbuddy/settings.json` 和 `~/.workbuddy/wb-sc`；不要先执行失败再提权。通常只需 agent 沙箱授权，无需 Windows 管理员权限，也不承诺永久免授权。已有权限时直接安装。
-3. 安装后再次运行 `remote status`，仅命令成功且 `ready=true` 才报告完成；授权拒绝或检查失败时简述原因并停止。完成回复只介绍安装结果、`key list` 中的款式/确认状态和两个示例：“把 K_S1 改成 Alt+Shift+T”“重置遥控器，弃用全部自定义配置”。未确认的款式标明“待实物确认”，不当作自动识别结果，不自动执行示例或确认款式。提示新建 WorkBuddy 会话加载 Hook，仍使用旧配置时再手动重启。
+2. 正式执行 `remote install --yes` 前，若目标超出可写范围，直接通过工具为完整安装申请权限，说明将写入 `~/.workbuddy/settings.json` 和 `~/.workbuddy/wb-sc`；不要先执行失败再提权。已有权限时直接安装。
+3. 安装后再次运行 `remote status`，仅命令成功且 `ready=true` 才报告完成；授权拒绝或检查失败时简述原因并停止。用 `key list` 读取型号和确认状态，不自动确认款式或执行示例。
+
+## 安装成功后必须回复
+
+包括已安装且 `ready=true`、无需重装的情况。简述“安装已完成”后，必须逐项回复下面四项，不得省略；型号以 `key list` 为准，未确认时只在型号后标“待实物确认”。
+
+- **遥控器型号**：HM-AItest-1（W306A）。
+- **遥控器改键操作**：可以说“把 K_S1 改成 Alt+Shift+T”。
+- **遥控器恢复出厂操作**：可以说“遥控器恢复出厂，重置所有改键”，会弃用整张自定义 map。
+- **遥控器呼吸灯对应状态**：蓝色呼吸＝处理中；黄色呼吸＝等待授权；紫色呼吸＝整理上下文；绿色闪亮后淡出＝完成；红色三连闪＝失败；状态灯熄灭＝空闲。
+
+回复到此结束，不追加红外、配对、多设备、文件路径、实现细节、重启等无关介绍或通用提醒。安装检查不能当作灯效实测；仅在实际故障排查时给出对应处理步骤。
 
 排障用 `remote doctor`，带 `--yes` 才测试灯态；卸载用 `remote uninstall --yes`。`ready=true` 仅表示本地安装检查通过；实际 busy/done 灯效需在新会话提交消息和结束回复时验证。
 
@@ -19,7 +30,3 @@ WB-SC 管理 Windows WorkBuddy 用户设置 `~/.workbuddy/settings.json` 中自�
 | `PermissionRequest` | wait | 需要人工授权 |
 | `Notification` | wait | 载荷命中权限相关关键词 |
 | `PreCompact` | compact | 开始整理上下文 |
-
-实际派发取决于 WorkBuddy 版本和事件发生条件。`status` 校验本地安装，实测覆盖范围由具体会话触发结果决定。取消、强退可能没有结束事件。多会话共享一只遥控器时灯态跟随最近事件。
-
-安装时验证并固定 Python 路径。普通 Windows 路径由 WorkBuddy 的 shell 直接调用 Python，需特殊引用的解释器路径走 PowerShell 兼容启动。Hook 只写 HID，一次枚举，跳过回执，发送失败输出 stderr 并继续对话。Hook 不保存正文。
