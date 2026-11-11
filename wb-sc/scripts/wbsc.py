@@ -459,6 +459,7 @@ def main():
     key_push.configure(sub.add_parser("key", help="遥控器单格键值推送（0x39）"))
     remote_sub = remote_setup.configure(sub.add_parser("remote", help="安装、检查、自检或卸载遥控器状态 Hook"))
     vendor_info.configure(remote_sub, receiver_led.device_defaults())
+    key_push.configure_reset(remote_sub)
 
     args = ap.parse_args()
     sys.exit(args.func(args) or 0)
