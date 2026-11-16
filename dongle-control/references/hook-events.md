@@ -1,6 +1,6 @@
 # WorkBuddy 状态 Hook
 
-WB-SC 管理 Windows WorkBuddy 用户设置 `~/.workbuddy/settings.json` 中自己的命令条目。配置、备份和运行副本保存在 `~/.workbuddy/wb-sc`。安装器保留用户其他 Hook 和既有设备配置。已启用旧 `workbuddy-status-led` 插件时，先停用旧插件以免重复点灯。
+WB-SC 管理 Windows/macOS WorkBuddy 用户设置 `~/.workbuddy/settings.json` 中自己的命令条目。配置、备份和运行副本保存在 `~/.workbuddy/wb-sc`。安装器保留用户其他 Hook 和既有设备配置。已启用旧 `workbuddy-status-led` 插件时，先停用旧插件以免重复点灯。Windows 使用原生 HID；macOS 先按 [macOS 安装与验收](macos.md) 准备 Python 与 HIDAPI，使用 POSIX 命令，不运行 PowerShell。
 
 ## 安装流程与回复
 

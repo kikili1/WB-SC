@@ -10,7 +10,7 @@
 
 两条硬性约束：
 
-1. **桌面端不能靠"写配置文件"改键** —— 不存在统一的键位配置文件；`Local Storage/leveldb` 在应用运行时被独占（`LOCK` 不可写），离线写入会被进程内存与云同步覆盖。**唯一例外**是 `scope: "global"` 的 `toggle-window`，主进程另存一份 `%USERPROFILE%\.workbuddy\app\shortcut-state.json`（见下节）。
+1. **桌面端不能靠"写配置文件"改键** —— 不存在统一的键位配置文件；不要直接写 `Local Storage/leveldb`，目录可写不代表 LevelDB 未锁定，离线写入也可能被进程内存与云同步覆盖。**唯一例外**是 `scope: "global"` 的 `toggle-window`，Windows 主进程另存一份 `%USERPROFILE%\.workbuddy\app\shortcut-state.json`（见下节）；Mac 路径与内部 IPC 尚未真机确认，使用 GUI 修改。
 2. **桌面端采用 cloud-as-source-of-truth** —— 云端已有 `overrides` 时，本地改动会被云端覆盖；云端为空时本地改动才会被上传沉淀。因此 CDP 注入的成功率取决于云端是否已存在该 namespace 数据。
 
 ## 先判定运行时（否则会改错地方）
@@ -23,7 +23,7 @@ Agent 可能跑在两个位置，键位作用域完全不同：
 | 在终端直接运行 `codebuddy` | 独立 CLI | 直接生效 |
 | 渲染进程内（无 CLI 环境变量） | 桌面 GUI | 仍是 localStorage，与 CLI 文件无关 |
 
-`scripts/wbsc.py detect` 会输出 `runtime.agent_runtime`、`cli_engine_version`、`launched_by_pid`、`app_version`，据此判断。桌面进程存活时，其 `Local Storage/leveldb` 必然被占用。
+`scripts/wbsc.py detect` 输出 `platform`、`runtime.agent_runtime`、`runtime.cli_engine_version`、`runtime.launched_by_pid`、`runtime.app_version`。`leveldb_state` 仅表示目录 missing/writable/blocked，探测时会创建并删除临时文件；不能推断数据库锁或进程状态。`app_running=unknown` 表示未检查应用进程，端口开放也不保证它属于 WorkBuddy。
 
 
 数据结构（桌面端）：
@@ -53,24 +53,24 @@ IPC 通道：`workbuddy:globalShortcut:updateToggleWindow`（渲染层 → 主�
 
 ## 决策流程
 
-1. 先跑 `detect`，确认桌面端是否运行（`leveldb_locked`）、是否有调试端口、CLI 配置是否存在。
+1. 先跑 `detect`，检查平台、目录可写性、调试端口和 CLI 配置；应用是否运行需另外确认，不能从目录可写性推断。
 2. 目标动作属于桌面端（如 `toggle-voice-recording`）→ 走 `plan`，默认给 GUI 操作步骤；只有用户明确接受"重启带调试端口"才走 `apply-desktop --via cdp`。
 3. 目标动作属于 CLI（`chat:*` / `app:*`）→ 走 `apply-cli`，写文件即可，可靠且可回滚。
 4. 任何写入前先 `check` 冲突；写入后回读校验。
 
 ## 命令
 
-脚本路径：`scripts/wbsc.py`（Python 标准库，无需安装依赖）。
+脚本路径：`scripts/wbsc.py`。Windows 用 Python 3.8+；macOS 用 Python 3.10+，将示例中的 `python` 换为 `python3` 或所选解释器的绝对路径。快捷键功能只需 Python 标准库，CDP 额外需要支持内置 fetch/WebSocket 的 Node.js（建议 22+）。
 
 ```bash
 # 探测环境
 python scripts/wbsc.py detect
 
-# 列出快捷键（桌面端默认值 + CLI 自定义值）
+# 列出快捷键（当前操作系统的桌面默认值 + CLI 自定义值）
 python scripts/wbsc.py list --target desktop
 python scripts/wbsc.py list --target cli
 
-# 冲突检测（归一化修饰键顺序，"Shift+Alt+P" 与 "Alt+Shift+P" 视为同键）
+# 静态冲突检测（当前平台默认值/内置规则；不检测其他应用实际占用）
 python scripts/wbsc.py check --binding "Alt+Shift+P" --target both
 
 # 生成改键方案（输出写入内容 + GUI 三步 + CDP 命令）
@@ -87,7 +87,9 @@ python scripts/wbsc.py apply-cli --context Chat --binding "ctrl+s" --unbind --ye
 
 ## 桌面端手动改键（可靠路径，优先使用）
 
-Windows：左侧栏底部头像 → 设置 → 快捷键设置 → 找到目标项 → 点击编辑（铅笔）→ 同时按下全部按键后松开 → 无冲突提示即成功。Mac 路径相同，按键用 `Meta`（⌘）替代 `Ctrl`。
+Windows：左侧栏底部头像 → 设置 → 快捷键设置 → 找到目标项 → 点击编辑（铅笔）→ 同时按下全部按键后松开 → 无冲突提示后验证实际效果。Mac 沿用此设置入口，`Meta/Cmd` 表示 ⌘，`Alt/Option` 表示 ⌥；不能把所有 Ctrl 组合机械替换为 Cmd，CLI 保留原 Ctrl 键位。
+
+`plan` 输出当前平台的合并片段，CDP 只更新当前平台覆盖并保留另一平台和其他动作。`toggle-window` 与 `send-message` 涉及应用内部 IPC/事件桥，脚本拒绝 CDP 注入，转为 GUI 指引。其余动作仅在唯一确认的 WorkBuddy 页面注入，配置非法时中止；重载后回读不一致即报错，不能将写入成功当作实际生效。
 
 ## 已知别名与保留项
 
@@ -100,5 +102,5 @@ Windows：左侧栏底部头像 → 设置 → 快捷键设置 → 找到目标�
 ## 执行注意
 
 - 快捷键配置写入/应用重启必须先 dry-run 并让用户确认；**不要擅自重启应用**（会中断当前会话与后台任务）。
-- CDP 注入后必须重载窗口才生效；页面重载会触发云端合并，若键位回退，说明云端覆盖，改用 GUI 路径即可（GUI 会同时更新云端）。
+- CDP 注入后必须重载窗口才生效；脚本重载并短时重复回读。若键位回退，可能是云端覆盖，改用 GUI 路径（GUI 会同时更新云端）；短时回读通过仍不能排除稍后的云同步覆盖。
 - 恢复默认：桌面端在设置项上点重置；CLI 删除 `~/.codebuddy/keybindings.json` 中对应条目或用 `--unbind`。

@@ -81,7 +81,6 @@ def collect(api, device, seconds):
 
 def execute(args):
     import math
-    import os
     from types import SimpleNamespace
     import receiver_led
 
@@ -92,8 +91,6 @@ def execute(args):
         if not args.yes:
             print('（预览）加 --yes 才会真正发送并等待回包')
             return 0
-        if os.name != 'nt':
-            raise OSError('遥控器信息查询需要 Windows')
         api = receiver_led.native()
         devices = receiver_led.candidates(api, SimpleNamespace(
             vid=args.vid, pid=args.pid, path=args.path))

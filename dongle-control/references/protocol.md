@@ -1,6 +1,6 @@
 # Dongle 命令与回执
 
-在 Windows 使用 Python 3.8+ 运行同级 `wb-sc/scripts/wbsc.py`。以下省略脚本路径。可使用 WorkBuddy 自带的 `%USERPROFILE%\.workbuddy\binaries\python\versions\<版本>\python.exe`。
+Windows 使用 Python 3.8+ 运行同级 `wb-sc/scripts/wbsc.py`，可使用 WorkBuddy 自带的 `%USERPROFILE%\.workbuddy\binaries\python\versions\<版本>\python.exe`。macOS 使用 Python 3.10+ 与 `hidapi==0.15.0`，准备步骤见 [macOS 安装与验收](macos.md)。以下省略脚本路径，两平台命令和协议相同；设备 `path` 不跨平台复用。
 
 | 命令 | 用途 |
 |---|---|

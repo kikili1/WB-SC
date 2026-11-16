@@ -59,9 +59,22 @@ class ResetTests(unittest.TestCase):
         self.assertEqual(json.loads(out.getvalue())['outcome'], 'unknown')
         api.write_report.assert_called_once()
 
+    def test_write_timeout_is_unknown_without_retry(self):
+        api = MagicMock()
+        api.write_report.side_effect = TimeoutError('write timed out')
+        with patch.object(led, 'native', return_value=api), \
+                patch.object(key_push, 'find_device', return_value=object()), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            self.assertEqual(key_push.reset(self.args()), 1)
+        self.assertEqual(json.loads(out.getvalue())['outcome'], 'unknown')
+        api.write_report.assert_called_once()
+
 
 class RemoteTests(unittest.TestCase):
     def setUp(self):
+        platform = patch.object(sys, 'platform', 'win32')
+        platform.start()
+        self.addCleanup(platform.stop)
         self.folder = tempfile.TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
         self.home = Path(self.folder.name)
@@ -146,6 +159,7 @@ class RemoteTests(unittest.TestCase):
             self.assertEqual(hook.main(), 0)
         self.assertEqual(out.getvalue(), '')
 
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows PowerShell integration')
     def test_registered_command_reads_utf8_without_sending(self):
         setup.operate('install', True, self.home)
         command = setup.load(self.settings, {})['hooks']['SessionStart'][0]['hooks'][0]['command']
@@ -180,6 +194,7 @@ class RemoteTests(unittest.TestCase):
             led.main(['send','done','--vid','10000'])
         self.assertEqual(error.exception.code, 2)
 
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows native HID API')
     def test_windows_write_cleanup(self):
         import win_hid as hid
         info = SimpleNamespace(output_report_length=64, path='chosen')

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """WB-SC — WorkBuddy 快捷键管理（桌面 GUI / CLI 双目标）。
 
-用法见 SKILL.md。仅依赖 Python 标准库。
+用法见 SKILL.md。macOS 硬件功能另需 hidapi。
 """
 
 import argparse
@@ -11,6 +11,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -44,6 +45,11 @@ SYSTEM_RESERVED = {
     "Meta+Tab", "Meta+D", "Meta+L", "Meta+R", "Meta+E", "Meta+I",
 }
 IME_PREFIX = {"Alt+Shift"}  # Windows 键盘布局切换前缀
+MAC_RESERVED = {'Meta+Tab', 'Meta+Space', 'Meta+Q', 'Alt+Meta+Esc', 'Ctrl+Meta+Q'}
+
+
+def desktop_platform():
+    return 'mac' if sys.platform == 'darwin' else 'win'
 
 
 # ---------------------------------------------------------------- binding utils
@@ -94,16 +100,14 @@ def load_desktop_defs():
 def leveldb_state():
     """三态判断 LevelDB 目录可用性：missing / writable / blocked。
 
-    blocked 可能来自应用独占（LOCK），也可能来自沙箱只读。外部写入均不可行时
-    都应当回退到 GUI 路径，因此两态合并处理是安全的。
+    仅探测目录可写性；不检查 LevelDB LOCK 或应用是否运行。
     """
     d = LEVELDB_DIR
     if not d.exists():
         return "missing"
-    probe = d / ".wbsc_probe"
     try:
-        probe.write_text("probe", encoding="utf-8")
-        probe.unlink()
+        with tempfile.NamedTemporaryFile(prefix='.wbsc_probe-', dir=d):
+            pass
         return "writable"
     except (PermissionError, OSError):
         return "blocked"
@@ -139,7 +143,8 @@ def runtime_info():
 
 
 def detect():
-    info = {"runtime": runtime_info(),
+    info = {"platform": sys.platform, "runtime": runtime_info(),
+            "app_running": "unknown",
             "leveldb_dir": str(LEVELDB_DIR), "leveldb_state": leveldb_state(),
             "cdp_ports": {}, "cli_config": str(CLI_CONFIG),
             "cli_config_exists": CLI_CONFIG.exists()}
@@ -173,9 +178,10 @@ def print_table(rows, headers):
 
 def cmd_list(args):
     if args.target in ("desktop", "both"):
-        print("== 桌面端快捷键（Windows 默认值；可编辑=是 表示可在设置中修改） ==")
-        rows = [[r["name"], r["id"], r["win"], r["scope"], "是" if r["editable"] else "否"] for r in desktop_rows()]
-        print_table(rows, ["名称", "id", "默认键(Win)", "作用域", "可编辑"])
+        platform = desktop_platform()
+        print(f"== 桌面端快捷键（{platform} 默认值；可编辑=是 表示可在设置中修改） ==")
+        rows = [[r["name"], r["id"], r[platform], r["scope"], "是" if r["editable"] else "否"] for r in desktop_rows()]
+        print_table(rows, ["名称", "id", f"默认键({platform})", "作用域", "可编辑"])
         print()
         print(f"覆盖值存储：localStorage['{DESKTOP_STORAGE_KEY}']（无独立配置文件）")
         print()
@@ -207,7 +213,7 @@ def cmd_check(args):
     conflicts = []
     if args.target in ("desktop", "both"):
         for s in load_desktop_defs()["shortcuts"]:
-            for plat in ("defaultWin", "defaultMac"):
+            for plat in (("defaultMac",) if desktop_platform() == 'mac' else ("defaultWin",)):
                 if normalize(s.get(plat)) == target_binding:
                     conflicts.append(f"桌面端 {s['id']}（{s.get('labelZh')}，{plat}）")
         # 允许覆盖自身
@@ -227,11 +233,13 @@ def cmd_check(args):
             if normalize(k) == target_binding:
                 conflicts.append(f"CLI {v}")
 
-    if target_binding in SYSTEM_RESERVED:
-        conflicts.append("系统保留快捷键（Windows）")
-    if target_binding in IME_PREFIX:
+    reserved = MAC_RESERVED if desktop_platform() == 'mac' else SYSTEM_RESERVED
+    if target_binding in {normalize(key) for key in reserved}:
+        conflicts.append(f"系统常用/保留快捷键（{desktop_platform()}）")
+    if desktop_platform() == 'win' and target_binding in IME_PREFIX:
         conflicts.append("Windows 输入法键盘布局切换前缀")
 
+    print('静态检查：基于内置默认键和规则，未检查其他应用实际占用或桌面自定义覆盖。')
     if conflicts:
         print("冲突检测：存在 %d 项冲突" % len(conflicts))
         for c in conflicts:
@@ -240,7 +248,7 @@ def cmd_check(args):
 
     print("冲突检测：未发现冲突。")
     mods = target_binding.split("+")[:-1]
-    if "Alt" in mods and "Shift" in mods:
+    if desktop_platform() == 'win' and "Alt" in mods and "Shift" in mods:
         print("提示：Alt+Shift 是 Windows 默认的键盘布局切换前缀，部分输入法会在按住时拦截组合键；"
               "若该键无效，先在「设置 > 时间和语言 > 输入 > 高级键盘设置 > 输入语言热键」关闭 Alt+Shift 切换。")
     return 0
@@ -264,10 +272,10 @@ def cmd_plan(args):
         print(f"{args.id}（{s.get('labelZh')}）标记为不可编辑，桌面端设置界面不提供改键。")
         return 2
     binding = pretty(args.binding)
-    payload = {"version": 1, "overrides": {args.id: {"mac": binding, "win": binding}}}
+    payload = {"version": 1, "overrides": {args.id: {desktop_platform(): binding}}}
     print(f"目标：{s.get('labelZh')}（{args.id}）")
     print(f"当前默认：Mac={s.get('defaultMac')} / Win={s.get('defaultWin')}")
-    print(f"计划写入：{binding}（Mac 与 Win 同值；桌面端不做 Ctrl/Meta 自动映射覆盖）")
+    print(f"计划合并：{binding}（仅 {desktop_platform()}，保留另一平台覆盖值）")
     print()
     print("写入内容（合并进 localStorage）：")
     print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -277,8 +285,11 @@ def cmd_plan(args):
     print("    1) 点击左侧栏底部头像 → 设置 → 快捷键设置")
     print(f"    2) 找到「{s.get('labelZh')}」一行，点击编辑（铅笔图标）")
     print(f"    3) 同时按住 {binding}（全部按下后松开）→ 确认无冲突提示 → 关闭面板")
-    print("  B CDP 注入（实验性，需应用以调试端口启动）")
-    print(f"    python wbsc.py apply-desktop --id {args.id} --binding {binding} --via cdp --yes")
+    if args.id not in ('toggle-window', 'send-message'):
+        print("  B CDP 注入（实验性，需应用以调试端口启动）")
+        print(f"    python wbsc.py apply-desktop --id {args.id} --binding {binding} --via cdp --yes")
+    else:
+        print('  此动作需要内部 IPC/事件桥，当前仅使用 A 设置界面。')
     return 0
 
 
@@ -292,6 +303,7 @@ def find_app_exe():
         Path(os.environ.get("PROGRAMFILES", "")) / "WorkBuddy" / "WorkBuddy.exe",
         Path(os.environ.get("PROGRAMFILES(X86)", "")) / "WorkBuddy" / "WorkBuddy.exe",
         Path("/Applications/WorkBuddy.app/Contents/MacOS/WorkBuddy"),
+        Path.home() / 'Applications/WorkBuddy.app/Contents/MacOS/WorkBuddy',
     ]
     for c in candidates:
         try:
@@ -300,6 +312,16 @@ def find_app_exe():
         except OSError:
             continue
     return None
+
+
+def find_node():
+    node = shutil.which('node')
+    if node:
+        return node
+    managed = Path.home() / '.workbuddy/binaries/node/versions'
+    patterns = ('*/bin/node', '*/node') if sys.platform == 'darwin' else ('*/node.exe',)
+    candidates = [p for pattern in patterns for p in managed.glob(pattern) if p.is_file()]
+    return str(max(candidates, key=lambda p: p.stat().st_mtime)) if candidates else None
 
 
 def cmd_apply_desktop(args):
@@ -314,6 +336,11 @@ def cmd_apply_desktop(args):
 
     if args.via == "gui" or not args.via:
         return cmd_plan(args)
+
+    if args.id in ('toggle-window', 'send-message'):
+        print('该动作需要应用内部 IPC/事件桥；当前接口未确认，请按 plan 的 GUI 步骤修改。')
+        cmd_plan(args)
+        return 2
 
     # CDP 路径
     port = None
@@ -338,17 +365,14 @@ def cmd_apply_desktop(args):
         print("确认后追加 --yes 执行。")
         return 0
 
-    node = shutil.which("node")
-    if not node:
-        managed = Path.home() / ".workbuddy" / "binaries" / "node" / "versions"
-        cands = sorted(managed.glob("*/node.exe")) if managed.exists() else []
-        node = str(cands[-1]) if cands else None
+    node = find_node()
     if not node:
         print("未找到 node，可执行文件不可用；请改用手动改键。")
         return 4
 
     script = HERE / "cdp_inject.mjs"
-    cmd = [node, str(script), "--port", str(port), "--id", args.id, "--binding", binding]
+    cmd = [node, str(script), "--port", str(port), "--id", args.id, "--binding", binding,
+           '--platform', desktop_platform()]
     if args.reload:
         cmd.append("--reload")
     print("执行：", " ".join(cmd))

@@ -1,6 +1,6 @@
 ---
 name: dongle-control
-description: 通过 WB-SC 向 USB Dongle 转发遥控器改键、整机配置重置、单键恢复、点灯和查询命令，或首次安装、修复、卸载 WorkBuddy 状态 Hook。不适用于桌面快捷键配置、固件升级或硬件调试。
+description: 在 Windows 或 macOS 通过 WB-SC 向 USB Dongle 转发遥控器改键、整机配置重置、单键恢复、点灯和查询命令，或首次安装、修复、卸载 WorkBuddy 状态 Hook。不适用于桌面快捷键配置、固件升级或硬件调试。
 ---
 
 # dongle-control
@@ -8,6 +8,19 @@ description: 通过 WB-SC 向 USB Dongle 转发遥控器改键、整机配置重
 使用同级 `wb-sc/scripts/wbsc.py`。命令和参数见 [协议与调用](references/protocol.md)。
 
 当前面向 HM-AItest-1（W306A）遥控器与接收器一对一使用。安装成功后必须回复型号、改键操作、恢复出厂操作和状态灯说明，格式见 [安装流程](references/hook-events.md)。
+
+## Windows
+
+- Python 3.8+，使用原生 Windows HID；不需要 HIDAPI。
+- 使用 `python ../wb-sc/scripts/wbsc.py`，安装、诊断和卸载按 [Hook 安装流程](references/hook-events.md)。
+
+## macOS
+
+- 目标 macOS 12+（Intel / Apple Silicon）、Python 3.10+，硬件功能需 `hidapi==0.15.0`。
+- 先读 [macOS 安装与验收](references/macos.md)，使用 `python3 ../wb-sc/scripts/wbsc.py`；不运行 PowerShell 或 `run.ps1`。
+- 适配完成，Mac 真机待验收；根据实际回执报告结果，不将依赖检查或安装完成当作灯效、改键或事件触发实测。
+
+## 两平台共用操作
 
 - **改遥控器实体键** → `key list` 查款式和位置，`key push --json` 预览或写入。明确请求写入时才加 `--yes`。按键名写入前确认款式。
 - **恢复出厂／弃用改键 map** → `remote reset --json` 预览；用户明确要求重置时用 `remote reset --json --yes`。弃用全部主机覆盖并重启；仅 `outcome=discarded` 才确认弃用状态已保存。影响范围和回执见 [协议与调用](references/protocol.md)。

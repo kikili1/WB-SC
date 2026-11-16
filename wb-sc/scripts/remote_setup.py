@@ -7,12 +7,14 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import uuid
 
-VERSION = '0.4.0'
+VERSION = '0.5.0'
 FILES = ('receiver_led.py', 'win_hid.py', 'status_hook.py', 'run.ps1')
+MAC_FILES = ('receiver_led.py', 'mac_hid.py', 'status_hook.py')
 EVENTS = ('SessionStart', 'UserPromptSubmit', 'Stop', 'StopFailure',
           'PermissionRequest', 'Notification', 'PreCompact', 'SessionEnd')
 
@@ -68,6 +70,10 @@ def paths(home):
 
 
 def hook_command(root, python=None):
+    if sys.platform == 'darwin':
+        if python is None:
+            python = sys.executable
+        return shlex.join([str(python), '-B', str(root / 'runtime/status_hook.py')])
     if python is None:
         return ('powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden '
                 '-ExecutionPolicy Bypass -File "%s"' % (root / 'runtime/run.ps1'))
@@ -86,7 +92,10 @@ def usable_python(path):
     if not path or not Path(path).is_absolute() or not Path(path).is_file():
         return False
     try:
-        result = subprocess.run([path, '-B', '-c', 'import sys; sys.exit(sys.version_info < (3, 8))'],
+        check = ('import sys; import hid; assert hasattr(hid.device, "get_report_descriptor"); '
+                 'sys.exit(sys.version_info < (3, 10))' if sys.platform == 'darwin' else
+                 'import sys; sys.exit(sys.version_info < (3, 8))')
+        result = subprocess.run([path, '-B', '-c', check],
                                 capture_output=True, timeout=5,
                                 creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         return result.returncode == 0
@@ -95,11 +104,17 @@ def usable_python(path):
 
 
 def select_python(home):
-    managed = (home / '.workbuddy/binaries/python/versions').glob('*/python.exe')
+    pattern = '*/bin/python3' if sys.platform == 'darwin' else '*/python.exe'
+    managed = (home / '.workbuddy/binaries/python/versions').glob(pattern)
     for path in [*sorted(managed, key=lambda p: p.stat().st_mtime, reverse=True), Path(sys.executable)]:
         if usable_python(str(path)):
             return str(path)
-    raise OSError('No usable Python 3.8+ interpreter for WB-SC hooks')
+    raise OSError('No usable Hook Python; macOS needs Python 3.10+ with hidapi==0.15.0 '
+                  '(install using the selected Python -m pip install hidapi==0.15.0); Windows needs 3.8+')
+
+
+def runtime_files():
+    return MAC_FILES if sys.platform == 'darwin' else FILES
 
 
 def validate_config(config):
@@ -120,7 +135,7 @@ def inspect(home=None, source=None):
     source = Path(__file__).resolve().parent if source is None else Path(source)
     python = manifest.get('python')
     command = hook_command(root, python)
-    owned = {command, hook_command(root)}
+    owned = {command, hook_command(root), *manifest.get('commands', [])}
     entries = {event: [(g.get('matcher'), h) for g in groups for h in g.get('hooks', [])
                        if isinstance(h, dict) and h.get('type') == 'command' and h.get('command') in owned]
                for event, groups in settings.get('hooks', {}).items()}
@@ -129,10 +144,10 @@ def inspect(home=None, source=None):
     registered = all(entries.get(event) == [expected] for event in EVENTS) and set(events) == set(EVENTS)
     intact = all((root / 'runtime' / f).is_file() and
                  hashlib.sha256((root / 'runtime' / f).read_bytes()).hexdigest() == manifest.get('hashes', {}).get(f)
-                 for f in FILES)
+                 for f in runtime_files())
     current = manifest.get('version') == VERSION and all(
         hashlib.sha256((source / f).read_bytes()).hexdigest() == manifest.get('hashes', {}).get(f)
-        for f in FILES)
+        for f in runtime_files()) and manifest.get('platform', 'win32') == sys.platform
     python_ready = usable_python(python)
     config_path = root / 'config.json'
     try:
@@ -168,7 +183,7 @@ def operate(action, yes=False, home=None, source=None):
     manifest = load(manifest_path, {})
     if not isinstance(manifest, dict):
         raise ValueError('Invalid WB-SC installation record')
-    managed = {hook_command(root), hook_command(root, manifest.get('python'))}
+    managed = {hook_command(root), hook_command(root, manifest.get('python')), *manifest.get('commands', [])}
     if action == 'status':
         result = inspect(home, source)
         print(json.dumps({k: v for k, v in result.items() if k not in ('root', 'config')},
@@ -177,8 +192,8 @@ def operate(action, yes=False, home=None, source=None):
     if action == 'doctor':
         return doctor(home, probe=yes)
     if action == 'install':
-        if os.name != 'nt':
-            raise OSError('WB-SC receiver hooks require Windows')
+        if sys.platform not in ('win32', 'darwin'):
+            raise OSError('WB-SC receiver hooks support Windows and macOS only')
         if any(v for k, v in settings.get('enabledPlugins', {}).items() if k.startswith('workbuddy-status-led@')):
             raise ValueError('Disable the old workbuddy-status-led plugin first to avoid duplicate hooks')
         check_events_in_sync()
@@ -195,22 +210,28 @@ def operate(action, yes=False, home=None, source=None):
         python = select_python(home)
         command = hook_command(root, python)
         managed.add(command)
-        payload = {root / 'runtime' / f: (source / f).read_bytes() for f in FILES}
+        payload = {root / 'runtime' / f: (source / f).read_bytes() for f in runtime_files()}
+        for name, digest in manifest.get('hashes', {}).items():
+            if name in FILES + MAC_FILES and name not in runtime_files():
+                old = root / 'runtime' / name
+                if old.is_file() and hashlib.sha256(old.read_bytes()).hexdigest() == digest:
+                    payload[old] = None
         if not config_path.exists():
             payload[config_path] = encode(config)
         settings = without_owned(settings, managed)
         for event in EVENTS:
             settings.setdefault('hooks', {}).setdefault(event, []).append(
                 {'hooks': [{'type': 'command', 'command': command, 'timeout': 6}]})
-        payload[manifest_path] = encode({'version': VERSION, 'commands': [command], 'python': python,
-            'hashes': {f: hashlib.sha256(payload[root / 'runtime' / f]).hexdigest() for f in FILES}})
+        payload[manifest_path] = encode({'version': VERSION, 'platform': sys.platform,
+            'commands': [command], 'python': python,
+            'hashes': {f: hashlib.sha256(payload[root / 'runtime' / f]).hexdigest() for f in runtime_files()}})
     else:
         settings = without_owned(settings, managed)
         payload = {manifest_path: None}
         residual = (root / 'runtime').as_posix().casefold() in json.dumps(
             settings.get('hooks', {}), ensure_ascii=False).replace('\\\\', '/').casefold()
         for f, digest in manifest.get('hashes', {}).items():
-            if f not in FILES:
+            if f not in FILES + MAC_FILES:
                 continue
             path = root / 'runtime' / f
             if path.exists() and not residual and hashlib.sha256(path.read_bytes()).hexdigest() == digest:
@@ -258,8 +279,8 @@ def doctor(home=None, probe=False):
         if tag == 'fail':
             failures.append(text)
 
-    windows = os.name == 'nt'
-    say('ok' if windows else 'fail', '平台：%s（接收器与 Hook 仅支持 Windows）' % sys.platform)
+    supported = sys.platform == 'darwin' or os.name == 'nt'
+    say('ok' if supported else 'fail', '平台：%s（支持 Windows/macOS）' % sys.platform)
 
     state = inspect(home)
     hook_python = load(state['root'] / 'installed.json', {}).get('python')
@@ -269,8 +290,11 @@ def doctor(home=None, probe=False):
         except OSError:
             hook_python = None
     say('ok' if hook_python else 'fail',
-        '可用的 Hook Python：%s' % (hook_python or '未找到可执行的 Python 3.8+'))
-    say('ok' if sys.version_info >= (3, 8) else 'fail', '当前 Python：%s' % sys.version.split()[0])
+        '可用的 Hook Python：%s' % (hook_python or '未找到；Mac 需要 Python 3.10+ 和 hidapi==0.15.0'))
+    required = (3, 10) if sys.platform == 'darwin' else (3, 8)
+    say('ok' if sys.version_info >= required else 'fail', '当前 Python：%s' % sys.version.split()[0])
+    if sys.platform == 'darwin':
+        say('ok' if hook_python else 'fail', 'HIDAPI：随 Hook Python 检查；缺失时用该 Python -m pip install hidapi==0.15.0')
 
     if state['ready']:
         say('ok', 'Hook 已安装：版本 %s，%d/%d 事件' % (state['version'], len(state['events']), len(EVENTS)))
@@ -296,16 +320,25 @@ def doctor(home=None, probe=False):
         say('warn', '遥控器款式 %s 未确认；key push --name 会被拒绝，确认后用 key use --variant %s'
             % (variant, variant))
 
-    if not windows:
+    if not supported:
         return 1
 
     import receiver_led
-    api = receiver_led.native()
     args = SimpleNamespace(vid=int(vid, 16), pid=int(pid, 16), path=config.get('path'))
-    devices = api.enumerate_hid_devices()
+    try:
+        api = receiver_led.native()
+        devices = api.enumerate_hid_devices()
+    except (OSError, ValueError) as exc:
+        say('fail', 'HID 枚举/打开失败：%s' % exc)
+        return 1
     matched = receiver_led.candidates(api, args, devices=devices)
     if len(matched) == 1:
         d = matched[0]
+        try:
+            with api.open_reader(d):
+                pass
+        except OSError as exc:
+            say('fail', '无法打开接收器：%s；按实际系统错误检查设备访问权限' % exc)
         say('ok', '接收器：%04X:%04X usage_page=0x%02X in/out=%d/%d'
             % (d.vendor_id, d.product_id, d.usage_page, d.input_report_length, d.output_report_length))
     elif matched:

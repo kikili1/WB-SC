@@ -1,4 +1,4 @@
-"""Standalone Windows receiver LED sender; Python standard library only."""
+"""Standalone Windows/macOS receiver LED sender."""
 import argparse
 import json
 import math
@@ -64,8 +64,11 @@ def hex_id(value):
 
 
 def native():
+    if sys.platform == 'darwin':
+        import mac_hid
+        return mac_hid
     if os.name != 'nt':
-        raise OSError('Receiver LED control requires Windows')
+        raise OSError('Receiver control supports Windows and macOS only')
     import win_hid
     return win_hid
 
@@ -115,8 +118,6 @@ def execute(args):
     try:
         if not math.isfinite(args.timeout) or not 0 < args.timeout <= 60:
             raise ValueError('Timeout must be between 0 and 60 seconds')
-        if os.name != 'nt':
-            raise OSError('Receiver LED control requires Windows')
         if args.operation in ('send', 'probe') and not args.yes:
             print('[dry-run] TX:', out_packet(args).hex(' ').upper())
             return 0
