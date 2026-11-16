@@ -9,11 +9,13 @@ import sys
 import time
 
 STATES = {"idle": 0, "busy": 1, "done": 2, "error": 3, "wait": 4, "compact": 5}
-PROBE = None  # 能力查询报文，见 out_packet()
+CONFIG_PATH = None
 
 
 def config_path():
-    """设备配置：安装后在 ~/.workbuddy/wb-sc/config.json，直接跑源码时回落到同目录。"""
+    """显式配置优先；运行副本读相邻配置，旧源码调用保持原默认值。"""
+    if CONFIG_PATH is not None:
+        return CONFIG_PATH
     scripts = Path(__file__).resolve().parent
     if scripts.name == 'runtime':
         return scripts.parent / 'config.json'
@@ -25,8 +27,18 @@ def config_path():
 
 def read_config():
     try:
-        return json.loads(config_path().read_text(encoding='utf-8-sig'))
-    except (OSError, ValueError):
+        config = json.loads(config_path().read_text(encoding='utf-8-sig'))
+        if not isinstance(config, dict):
+            raise ValueError('Device configuration must be an object')
+        if CONFIG_PATH is not None:
+            for key in ('vid', 'pid'):
+                hex_id(config[key])
+            if config.get('path') is not None and not isinstance(config['path'], str):
+                raise ValueError('Device path must be a string or null')
+        return config
+    except (OSError, ValueError, KeyError, TypeError, argparse.ArgumentTypeError) as exc:
+        if CONFIG_PATH is not None:
+            raise ValueError('Invalid device configuration %s: %s' % (CONFIG_PATH, exc)) from exc
         return {}
 
 
@@ -42,6 +54,16 @@ def device_defaults():
     """让所有命令默认跟随 config.json，用户换接收器只需改一处。"""
     config = read_config()
     return hex_or(config.get('vid'), 0x1915), hex_or(config.get('pid'), 0x1025), config.get('path')
+
+
+def resolve_device(args):
+    """解析完成后，仅为实际硬件命令补齐缺省参数。"""
+    if getattr(args, 'worker', False) and args.vid is not None and args.pid is not None:
+        return
+    if any(getattr(args, key) is None for key in ('vid', 'pid', 'path')):
+        for key, value in zip(('vid', 'pid', 'path'), device_defaults()):
+            if getattr(args, key) is None:
+                setattr(args, key, value)
 
 
 def packet(state):
@@ -183,14 +205,13 @@ def execute(args):
 
 def configure(parser):
     sub = parser.add_subparsers(dest='operation', required=True)
-    vid, pid, path = device_defaults()
     for operation in ('list', 'send', 'probe'):
         p = sub.add_parser(operation)
         if operation == 'send':
             p.add_argument('state', choices=STATES)
-        p.add_argument('--vid', type=hex_id, default=vid)
-        p.add_argument('--pid', type=hex_id, default=pid)
-        p.add_argument('--path', default=path)
+        p.add_argument('--vid', type=hex_id)
+        p.add_argument('--pid', type=hex_id)
+        p.add_argument('--path')
         p.add_argument('--timeout', type=float, default=2)
         p.add_argument('--yes', action='store_true')
         p.add_argument('--no-wait', action='store_true',
@@ -203,6 +224,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     configure(parser)
     args = parser.parse_args(argv)
+    resolve_device(args)
     return execute(args)
 
 

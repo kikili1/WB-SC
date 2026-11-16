@@ -1,37 +1,21 @@
 ---
 name: dongle-control
-description: 在 Windows 或 macOS 通过 WB-SC 向 USB Dongle 转发遥控器改键、整机配置重置、单键恢复、点灯和查询命令，或首次安装、修复、卸载 WorkBuddy 状态 Hook。不适用于桌面快捷键配置、固件升级或硬件调试。
+description: 在 Windows 或 macOS 控制 USB Dongle 遥控器的改键、配置重置、点灯和查询，或为当前本地 agent 安装、检查、修复、卸载回复状态 Hook。不用于桌面快捷键、固件升级或硬件调试。
 ---
 
 # dongle-control
 
-使用同级 `wb-sc/scripts/wbsc.py`。命令和参数见 [协议与调用](references/protocol.md)。
+统一运行同级 `wb-sc/scripts/wbsc.py`。Windows 使用 Python 3.8+ 和原生 HID；macOS 使用 Python 3.10+ 与 `hidapi==0.15.0`，依赖和权限见 [macOS 指引](references/macos.md)。
 
-当前面向 HM-AItest-1（W306A）遥控器与接收器一对一使用。安装成功后必须回复型号、改键操作、恢复出厂操作和状态灯说明，格式见 [安装流程](references/hook-events.md)。
+## 按任务读取
 
-## Windows
+- **安装、检查、修复、卸载状态 Hook**：读 [通用安装流程](references/hook-events.md)。由当前 agent 选择自己的配置段，不提供分宿主入口，不根据模型名称或目录存在推断宿主。
+- **遥控器改键、单键恢复、整机重置、点灯或查询**：读 [命令与回执](references/protocol.md)。已有当前宿主安装时，将其 `remote status` 返回的 `config` 作为全局 `--config` 参数，确保操作与 Hook 使用同一设备配置；同一任务沿用已确定的路径，无需每次重新检查。
 
-- Python 3.8+，使用原生 Windows HID；不需要 HIDAPI。
-- 使用 `python ../wb-sc/scripts/wbsc.py`，安装、诊断和卸载按 [Hook 安装流程](references/hook-events.md)。
+## 执行与结果
 
-## macOS
-
-- 目标 macOS 12+（Intel / Apple Silicon）、Python 3.10+，硬件功能需 `hidapi==0.15.0`。
-- 先读 [macOS 安装与验收](references/macos.md)，使用 `python3 ../wb-sc/scripts/wbsc.py`；不运行 PowerShell 或 `run.ps1`。
-- 适配完成，Mac 真机待验收；根据实际回执报告结果，不将依赖检查或安装完成当作灯效、改键或事件触发实测。
-
-## 两平台共用操作
-
-- **改遥控器实体键** → `key list` 查款式和位置，`key push --json` 预览或写入。明确请求写入时才加 `--yes`。按键名写入前确认款式。
-- **恢复出厂／弃用改键 map** → `remote reset --json` 预览；用户明确要求重置时用 `remote reset --json --yes`。弃用全部主机覆盖并重启；仅 `outcome=discarded` 才确认弃用状态已保存。影响范围和回执见 [协议与调用](references/protocol.md)。
-- **恢复单个按键** → `key push --name <键名> --restore --json` 预览，用户明确要求恢复该键时加 `--yes`，仅 `outcome=saved` 才算恢复成功。这会写回已确认款式表中的出厂值；不是整机恢复出厂。未指定重置对象时先确认范围。
-- **点灯、枚举或查询** → `led send`、`led list` 或 `remote info`。
-- **首次安装或修复 Hook** → 按 [安装流程](references/hook-events.md) 执行，包含提前授权、安装验收和简短回复。排障用 `remote doctor`，卸载用 `remote uninstall --yes`。
-- **核对支持的事件、安装生效或联调** → 读 [WorkBuddy Hook 事件](references/hook-events.md)。
-
-## 改键后的回复
-
-- 默认只用一句话说明按键和改后的功能，例如：“已将 S1 改为 Ctrl+D。”多个按键可合并为一句，或每键一行。
-- 隐藏命令、协议、键码、参数、JSON、回执字段、文件路径及执行过程；仅在用户明确追问时展开技术细节。
-- 仍按真实回执判断结果；失败或结果未知时只简短说明原因及必要的下一步，不将发送成功当作保存成功。
-- 不追加总结、测试清单、通用提醒或无关说明。
+- 默认面向 HM-AItest-1（W306A），按键名写入前核对款式；已有确认记录时不重复确认。`key list` 查看，`key use` 记录实物确认。
+- 用户明确要求写入、恢复或重置时直接加 `--yes`；仅讨论或预览时不加。不要额外重复预览或请求相同授权。
+- 单键恢复用 `key push --restore`，整机恢复用 `remote reset`，两者不可替代。仅 `saved` / `discarded` 分别表示遥控器确认保存 / 弃用配置；超时报告未知，不自动重发。
+- 改键后只简述按键和新功能。默认隐藏命令、键码、JSON 和回执细节；失败时说明原因及必要下一步，不把 USB 写入成功当保存成功。
+- Hook 配置检查、宿主启用/信任和真实灯效分别判断；未实测时如实说明。

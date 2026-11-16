@@ -119,12 +119,13 @@ def execute(args):
         return 1
 
 
-def configure(sub, defaults):
+def configure(sub):
     """挂到 remote 子命令下：remote info。"""
     p = sub.add_parser('info', help='向遥控器查询一次 CS 号/版本（需固件支持 0x1F）')
-    p.add_argument('--vid', type=lambda s: int(s, 16), default=defaults[0])
-    p.add_argument('--pid', type=lambda s: int(s, 16), default=defaults[1])
-    p.add_argument('--path', default=defaults[2])
+    from receiver_led import hex_id
+    p.add_argument('--vid', type=hex_id)
+    p.add_argument('--pid', type=hex_id)
+    p.add_argument('--path')
     p.add_argument('--seconds', type=float, default=3, help='等待回包秒数，默认 3')
     p.add_argument('--yes', action='store_true', help='真正发送（否则只打印报文）')
     p.set_defaults(func=execute)

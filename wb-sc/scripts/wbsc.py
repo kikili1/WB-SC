@@ -439,6 +439,7 @@ def cmd_apply_cli(args):
 
 def main():
     ap = argparse.ArgumentParser(prog="wbsc", description="WB-SC WorkBuddy 快捷键管理")
+    ap.add_argument('--config', type=Path, help='当前目标的设备配置文件（由 skill 选择）')
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     d = sub.add_parser("detect", help="探测桌面应用/调试端口/CLI 配置文件状态")
@@ -482,11 +483,24 @@ def main():
     receiver_led.configure(sub.add_parser("led", help="独立接收器点灯"))
     key_push.configure(sub.add_parser("key", help="遥控器单格键值推送（0x39）"))
     remote_sub = remote_setup.configure(sub.add_parser("remote", help="安装、检查、自检或卸载遥控器状态 Hook"))
-    vendor_info.configure(remote_sub, receiver_led.device_defaults())
+    vendor_info.configure(remote_sub)
     key_push.configure_reset(remote_sub)
 
     args = ap.parse_args()
-    sys.exit(args.func(args) or 0)
+    previous = receiver_led.CONFIG_PATH
+    try:
+        if args.config is not None:
+            receiver_led.CONFIG_PATH = args.config.expanduser().resolve()
+            receiver_led.read_config()
+        if hasattr(args, 'vid'):
+            receiver_led.resolve_device(args)
+        code = args.func(args) or 0
+    except (OSError, ValueError) as exc:
+        print('WB-SC: %s' % exc, file=sys.stderr)
+        code = 1
+    finally:
+        receiver_led.CONFIG_PATH = previous
+    sys.exit(code)
 
 
 if __name__ == "__main__":

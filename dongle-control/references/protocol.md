@@ -1,6 +1,6 @@
 # Dongle 命令与回执
 
-Windows 使用 Python 3.8+ 运行同级 `wb-sc/scripts/wbsc.py`，可使用 WorkBuddy 自带的 `%USERPROFILE%\.workbuddy\binaries\python\versions\<版本>\python.exe`。macOS 使用 Python 3.10+ 与 `hidapi==0.15.0`，准备步骤见 [macOS 安装与验收](macos.md)。以下省略脚本路径，两平台命令和协议相同；设备 `path` 不跨平台复用。
+运行同级 `wb-sc/scripts/wbsc.py`，平台依赖见 skill 入口。已有当前宿主安装时，硬件命令统一使用 `wbsc.py --config "remote status 返回的设备配置路径" ...`；以下只列子命令。省略配置参数保留旧行为，设备路径不跨平台复用。
 
 | 命令 | 用途 |
 |---|---|
@@ -14,7 +14,7 @@ Windows 使用 Python 3.8+ 运行同级 `wb-sc/scripts/wbsc.py`，可使用 Work
 | `remote reset --json` | 预览弃用全部主机覆盖；明确要求重置时加 `--yes` |
 | `remote info --yes` | 查询遥控器 CS、版本等，需固件支持 `0x1F` |
 
-按键名写入使用已确认的款式。已知坐标时可以直接传列和行，均从 0 起。先展示目标位置和键值。款式和键值编码见同级 Skill 的 [键值真值表](../../wb-sc/references/key-values.md)。
+按键名写入使用已确认的款式。已知坐标时可以直接传列和行，均从 0 起。执行前核对目标位置和键值，已明确授权时无需重复预览。款式和键值编码见同级 Skill 的 [键值真值表](../../wb-sc/references/key-values.md)。
 
 ## 单键重置
 

@@ -1,32 +1,48 @@
-# WorkBuddy 状态 Hook
+# 通用 Agent 状态 Hook
 
-WB-SC 管理 Windows/macOS WorkBuddy 用户设置 `~/.workbuddy/settings.json` 中自己的命令条目。配置、备份和运行副本保存在 `~/.workbuddy/wb-sc`。安装器保留用户其他 Hook 和既有设备配置。已启用旧 `workbuddy-status-led` 插件时，先停用旧插件以免重复点灯。Windows 使用原生 HID；macOS 先按 [macOS 安装与验收](macos.md) 准备 Python 与 HIDAPI，使用 POSIX 命令，不运行 PowerShell。
+用户只需说“安装/检查/修复/卸载遥控器状态 Hook”。当前 agent 根据产品上下文及实际配置选择下表中的内部参数，统一调用 `wbsc.py remote install/status/doctor/uninstall`。仅支持 Windows/macOS 本地 USB；云端、远程或容器不可视为能访问本机接收器。
 
-## 安装流程与回复
+## 选择当前配置段
 
-1. 安装前只简述 skill 用途和权限需求，省略计划与进度播报。用 `remote status` 检查，`ready=true` 时跳过重装；否则用 `remote install` 预览。
-2. 正式执行 `remote install --yes` 前，若目标超出可写范围，直接通过工具为完整安装申请权限，说明将写入 `~/.workbuddy/settings.json` 和 `~/.workbuddy/wb-sc`；不要先执行失败再提权。已有权限时直接安装。
-3. 安装后再次运行 `remote status`，仅命令成功且 `ready=true` 才报告完成；授权拒绝或检查失败时简述原因并停止。用 `key list` 读取型号和确认状态，不自动确认款式或执行示例。
+| `--agent` | 默认 Hook 文件 | 该宿主需核对的条件 |
+| --- | --- | --- |
+| `workbuddy` | `~/.workbuddy/settings.json` | 若启用旧状态灯插件，先避免重复注册。 |
+| `codex` | `~/.codex/hooks.json` | 尊重 `CODEX_HOME`；宿主要求审核并信任定义时由用户完成。 |
+| `claude` | `~/.claude/settings.json` | 尊重 `CLAUDE_CONFIG_DIR`，检查是否禁用 Hook。 |
+| `cursor` | `~/.cursor/hooks.json` | 用整轮 `stop.status` 区分完成、取消和错误。 |
+| `copilot` | `~/.copilot/hooks/wb-sc.json` | Copilot CLI 或 VS Code 共享 Copilot 运行时；尊重 `COPILOT_HOME`，确认本地执行。 |
+| `copilot-local` | 必须指定实际文件 | VS Code 旧 Local 运行时，核对 `chat.hookFilesLocations`、`chat.useHooks` 和工作区信任。 |
+| `gemini` | `~/.gemini/settings.json` | Gemini CLI；核对实际设置位置。 |
+| `trae` | `~/.trae-cn/hooks.json` | 启用 Hooks、确认运行方式，避免同时导入 Claude Hook；国际版从宿主核实路径。 |
+| `deepseek` | 必须指定实际文件 | DeepSeek Harness，使用下述官方兼容桥。 |
 
-## 安装成功后必须回复
+每次 Hook 命令显式带 `--agent A`，路径与默认不同时附加 `--hook-file P`。`P` 必须是当前宿主加载的 JSON 文件，不能是 TOML 或 composition YAML。来源不明确时先核查上下文，不扫描所有产品目录或默认安装到旧宿主。
 
-包括已安装且 `ready=true`、无需重装的情况。简述“安装已完成”后，必须逐项回复下面四项，不得省略；型号以 `key list` 为准，未确认时只在型号后标“待实物确认”。
+## 共用流程
 
-- **遥控器型号**：HM-AItest-1（W306A）。
-- **遥控器改键操作**：可以说“把 K_S1 改成 Alt+Shift+T”。
-- **遥控器恢复出厂操作**：可以说“遥控器恢复出厂，重置所有改键”，会弃用整张自定义 map。
-- **遥控器呼吸灯对应状态**：蓝色呼吸＝处理中；黄色呼吸＝等待授权；紫色呼吸＝整理上下文；绿色闪亮后淡出＝完成；红色三连闪＝失败；状态灯熄灭＝空闲。
+1. 用 `remote status --agent A [--hook-file P]` 检查。已就绪则跳过安装；`ready` 仅表示本地配置和运行副本通过检查，另看 `activation_required`。
+2. 需安装或修复且用户已授权时，执行同目标的 `remote install ... --yes`；仅预览时不加 `--yes`。如需文件权限，为目标 Hook 文件及相邻 `wb-sc` 目录申请完整安装权限。
+3. 安装后再检查同目标的 `remote status`，保留其中的设备配置路径 `config`，完成宿主启用/信任或桥接配置。不能自行绕过宿主信任或修改信任记录。
+4. 后续硬件命令统一使用 `wbsc.py --config "设备配置绝对路径" key/led/remote ...`，包括 `key list`、`key use`、改键、重置和查询；省略 `--config` 仅兼容旧调用。配置路径已确定时直接复用。
 
-回复到此结束，不追加红外、配对、多设备、文件路径、实现细节、重启等无关介绍或通用提醒。安装检查不能当作灯效实测；仅在实际故障排查时给出对应处理步骤。
+排障用同目标的 `remote doctor`；用户授权点灯后才加 `--yes`。卸载用同目标的 `remote uninstall ... --yes`，保留设备配置、用户其他 Hook 和被用户修改的运行文件。不得将这些命令省略目标后复制执行。
 
-排障用 `remote doctor`，带 `--yes` 才测试灯态；卸载用 `remote uninstall --yes`。`ready=true` 仅表示本地安装检查通过；实际 busy/done 灯效需在新会话提交消息和结束回复时验证。
+### DeepSeek Harness 桥接
 
-| 事件 | 状态 | 触发条件 |
-|---|---|---|
-| `SessionStart`、`SessionEnd` | idle | 会话开始或结束 |
-| `UserPromptSubmit` | busy | 用户提交请求 |
-| `Stop` | done | Agent 完成回复 |
-| `StopFailure` | error | 运行时报告回合失败 |
-| `PermissionRequest` | wait | 需要人工授权 |
-| `Notification` | wait | 载荷命中权限相关关键词 |
-| `PreCompact` | compact | 开始整理上下文 |
+从当前 composition 找到已挂载的 `@deepseek-ai/dsh-hooks-claude-code` 或 `@deepseek-ai/dsh-hooks-codex` 及其 `configPath`，复用该 JSON 文件作为 `P`，不同时挂载两种桥。没有桥时，按 [官方说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/experimental/hooks-claude-code/README.md) 向实际 composition 添加插件项：
+
+```yaml
+- name: '@deepseek-ai/dsh-hooks-claude-code'
+  config:
+    configPath: /absolute/path/to/hooks.json
+```
+
+保留其他插件，回读核对并按宿主要求重载。安装器只处理 Hook JSON 和运行副本；未找到 composition、桥不可用或缺少权限时，报告尚待桥接，不能声称已生效。桥属于实验组件，仅支持配置段列出的事件。
+
+## 验收与回复
+
+新会话中实际触发请求、回复完成及可用的等待事件，才能确认事件链路；手动点灯不能代替。缺少的事件不声称支持。多个 agent/会话共用一个灯时仍由最后一次事件决定状态。
+
+首次安装说明真实结果及四项：型号（`--config` 对应的 `key list`，未确认则注明）、改键示例、整机恢复出厂说法、当前宿主接入的灯态。蓝色呼吸＝处理中；黄色呼吸＝等待；紫色呼吸＝整理上下文；绿色闪亮后淡出＝完成；红色三连闪＝失败；熄灭＝空闲。
+
+检查、已就绪或普通修复仅回复结果与必要下一步。文件已安装但仍需启用/信任时明确说明，不回复全部生效。能力限制与来源见 [支持索引](../../wb-sc/references/agent-hook-support.md)。

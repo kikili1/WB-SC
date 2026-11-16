@@ -1,4 +1,4 @@
-"""Install only WB-SC-owned command hooks; preserve all other WorkBuddy settings."""
+"""Install only WB-SC-owned command hooks; preserve all other host settings."""
 import argparse
 import base64
 from datetime import datetime
@@ -12,11 +12,11 @@ import subprocess
 import sys
 import uuid
 
-VERSION = '0.5.0'
-FILES = ('receiver_led.py', 'win_hid.py', 'status_hook.py', 'run.ps1')
-MAC_FILES = ('receiver_led.py', 'mac_hid.py', 'status_hook.py')
-EVENTS = ('SessionStart', 'UserPromptSubmit', 'Stop', 'StopFailure',
-          'PermissionRequest', 'Notification', 'PreCompact', 'SessionEnd')
+import hook_profiles
+
+VERSION = '0.6.1'
+FILES = ('receiver_led.py', 'win_hid.py', 'status_hook.py', 'run.ps1', 'hook_profiles.py')
+MAC_FILES = ('receiver_led.py', 'mac_hid.py', 'status_hook.py', 'hook_profiles.py')
 
 
 def atomic(path, data):
@@ -38,23 +38,19 @@ def load(path, default):
 
 
 def without_owned(settings, commands):
+    list(hook_profiles.entries(settings))
     hooks = settings.get('hooks', {})
-    if not isinstance(hooks, dict):
-        raise ValueError('Existing hooks must be an object')
     for event, groups in list(hooks.items()):
-        if not isinstance(groups, list):
-            raise ValueError('Existing event hooks must be arrays')
         kept = []
         for group in groups:
-            if not isinstance(group, dict) or not isinstance(group.get('hooks', []), list):
-                raise ValueError('Invalid existing hook group')
-            entries = group.get('hooks', [])
-            rest = [h for h in entries if not (isinstance(h, dict) and h.get('type') == 'command'
-                                              and h.get('command') in commands)]
-            if len(rest) == len(entries):
+            if 'hooks' in group:
+                rest = [h for h in group['hooks'] if hook_profiles.command_of(h) not in commands]
+                if len(rest) == len(group['hooks']):
+                    kept.append(group)
+                elif rest:
+                    kept.append(dict(group, hooks=rest))
+            elif hook_profiles.command_of(group) not in commands:
                 kept.append(group)
-            elif rest:
-                kept.append(dict(group, hooks=rest))
         if kept:
             hooks[event] = kept
         elif groups:
@@ -64,16 +60,15 @@ def without_owned(settings, commands):
     return settings
 
 
-def paths(home):
-    base = home / '.workbuddy'
-    return base / 'settings.json', base / 'wb-sc'
+def paths(home, agent='workbuddy', hook_file=None):
+    return hook_profiles.paths(home, agent, hook_file)
 
 
-def hook_command(root, python=None):
+def hook_command(root, python=None, arguments=()):
     if sys.platform == 'darwin':
         if python is None:
             python = sys.executable
-        return shlex.join([str(python), '-B', str(root / 'runtime/status_hook.py')])
+        return shlex.join([str(python), '-B', str(root / 'runtime/status_hook.py'), *arguments])
     if python is None:
         return ('powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden '
                 '-ExecutionPolicy Bypass -File "%s"' % (root / 'runtime/run.ps1'))
@@ -82,8 +77,9 @@ def hook_command(root, python=None):
     # A bare executable works in both WorkBuddy shells. The encoded fallback
     # preserves literal paths when the executable needs shell-specific quoting.
     if re.fullmatch(r'[A-Za-z]:/[A-Za-z0-9_./-]+', exe) and not any(c in script for c in '$`"'):
-        return '%s -B "%s"' % (exe, script)
+        return ('%s -B "%s"' % (exe, script)) + ''.join(' ' + a for a in arguments)
     invocation = "& '%s' -B '%s'" % (exe.replace("'", "''"), script.replace("'", "''"))
+    invocation += ''.join(" '%s'" % a.replace("'", "''") for a in arguments)
     encoded = base64.b64encode(invocation.encode('utf-16-le')).decode('ascii')
     return 'powershell.exe -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ' + encoded
 
@@ -118,6 +114,8 @@ def runtime_files():
 
 
 def validate_config(config):
+    if not isinstance(config, dict):
+        raise ValueError('Device configuration must be an object')
     for key in ('vid', 'pid'):
         if not 0 <= int(config[key], 16) <= 65535:
             raise ValueError('Invalid receiver VID/PID')
@@ -125,29 +123,51 @@ def validate_config(config):
         raise ValueError('Receiver path must be a string or null')
 
 
-def inspect(home=None, source=None):
+def activation_note(agent):
+    return {
+        'codex': '配置检查不代表生效：在 Codex /hooks 中审核并信任当前定义。',
+        'trae': '配置检查不代表生效：在宿主 Hooks 设置中启用，确认运行方式；避免重复导入 Claude Hooks。',
+        'deepseek': '配置检查不代表生效：将官方 dsh-hooks-claude-code 桥挂载到当前 composition，并令 configPath 指向此文件。',
+        'copilot-local': '配置检查不代表生效：确认 VS Code Local 会话启用 chat.useHooks 且工作区受信任。',
+        'copilot': '配置检查不代表生效：确认本地会话实际使用 Copilot 运行时，非云端执行。',
+    }.get(agent)
+
+
+def inspect(home=None, source=None, agent='workbuddy', hook_file=None):
     """安装状态快照，status 与 doctor 共用。"""
     home = Path.home() if home is None else Path(home)
-    settings_path, root = paths(home)
+    settings_path, root = paths(home, agent, hook_file)
     manifest_path = root / 'installed.json'
     settings = load(settings_path, {}) if settings_path.exists() else {}
     manifest = load(manifest_path, {}) if manifest_path.exists() else {}
+    if not isinstance(settings, dict) or not isinstance(manifest, dict):
+        raise ValueError('Host settings and installation record must be objects')
+    if manifest and manifest.get('agent', 'workbuddy') != agent:
+        raise ValueError('This runtime directory belongs to another host; select a separate --hook-file')
     source = Path(__file__).resolve().parent if source is None else Path(source)
     python = manifest.get('python')
     command = hook_command(root, python)
     owned = {command, hook_command(root), *manifest.get('commands', [])}
-    entries = {event: [(g.get('matcher'), h) for g in groups for h in g.get('hooks', [])
-                       if isinstance(h, dict) and h.get('type') == 'command' and h.get('command') in owned]
-               for event, groups in settings.get('hooks', {}).items()}
-    events = [event for event, matches in entries.items() if matches]
-    expected = (None, {'type': 'command', 'command': command, 'timeout': 6})
-    registered = all(entries.get(event) == [expected] for event in EVENTS) and set(events) == set(EVENTS)
+    expected = hook_profiles.registrations(agent, lambda args: hook_command(root, python, args))
+    owned.update(hook_profiles.command_of(h) for _, _, h in hook_profiles.entries({'hooks': expected}))
+    actual = {}
+    for event, group, handler in hook_profiles.entries(settings):
+        if hook_profiles.command_of(handler) in owned:
+            actual.setdefault(event, []).append((group.get('matcher'), handler))
+    wanted = {}
+    for event, group, handler in hook_profiles.entries({'hooks': expected}):
+        wanted.setdefault(event, []).append((group.get('matcher'), handler))
+    events = list(actual)
+    registered = actual == wanted
+    if agent in ('cursor', 'copilot', 'copilot-local', 'trae'):
+        registered = registered and settings.get('version') == 1
     intact = all((root / 'runtime' / f).is_file() and
                  hashlib.sha256((root / 'runtime' / f).read_bytes()).hexdigest() == manifest.get('hashes', {}).get(f)
                  for f in runtime_files())
     current = manifest.get('version') == VERSION and all(
         hashlib.sha256((source / f).read_bytes()).hexdigest() == manifest.get('hashes', {}).get(f)
-        for f in runtime_files()) and manifest.get('platform', 'win32') == sys.platform
+        for f in runtime_files()) and manifest.get('platform', 'win32') == sys.platform \
+        and manifest.get('agent', 'workbuddy') == agent
     python_ready = usable_python(python)
     config_path = root / 'config.json'
     try:
@@ -155,61 +175,56 @@ def inspect(home=None, source=None):
         config_ready = True
     except (OSError, KeyError, TypeError, ValueError):
         config_ready = False
-    return {'version': manifest.get('version'), 'runtime_intact': intact, 'events': events,
-            'registered': registered, 'current': current, 'python_ready': python_ready,
+    return {'agent': agent, 'settings': str(settings_path),
+            'activation_required': activation_note(agent),
+            'version': manifest.get('version'), 'runtime_intact': intact, 'events': events,
+            'registered': registered, 'current': current, 'python': python, 'python_ready': python_ready,
             'config_ready': config_ready,
             'ready': registered and intact and current and python_ready and config_ready,
             'root': root, 'config': config_path}
 
 
-def check_events_in_sync():
-    """Hook 条目与事件映射必须一一对应，否则事件会被静默忽略。"""
-    import status_hook
-    missing = set(EVENTS) - set(status_hook.EVENTS)
-    extra = set(status_hook.EVENTS) - set(EVENTS)
-    if missing or extra:
-        raise ValueError('EVENTS 与 status_hook 不一致：缺 %s，多 %s' % (sorted(missing), sorted(extra)))
-
-
-def operate(action, yes=False, home=None, source=None):
+def operate(action, yes=False, home=None, source=None, agent='workbuddy', hook_file=None):
     home = Path.home() if home is None else Path(home)
     source = Path(__file__).resolve().parent if source is None else Path(source)
-    settings_path, root = paths(home)
+    if action == 'status':
+        result = inspect(home, source, agent, hook_file)
+        print(json.dumps({k: str(v) if k == 'config' else v for k, v in result.items() if k != 'root'},
+                         ensure_ascii=False, indent=2))
+        return result
+    if action == 'doctor':
+        return doctor(home, probe=yes, agent=agent, hook_file=hook_file)
+    settings_path, root = paths(home, agent, hook_file)
     manifest_path = root / 'installed.json'
     settings_before = settings_path.read_bytes() if settings_path.exists() else None
     settings = json.loads(settings_before.decode('utf-8-sig')) if settings_before is not None else {}
     if not isinstance(settings, dict):
-        raise ValueError('WorkBuddy settings must be a JSON object')
+        raise ValueError('Host settings must be a JSON object')
     manifest = load(manifest_path, {})
     if not isinstance(manifest, dict):
         raise ValueError('Invalid WB-SC installation record')
+    if manifest and manifest.get('agent', 'workbuddy') != agent:
+        raise ValueError('This runtime directory belongs to another host; select a separate --hook-file')
     managed = {hook_command(root), hook_command(root, manifest.get('python')), *manifest.get('commands', [])}
-    if action == 'status':
-        result = inspect(home, source)
-        print(json.dumps({k: v for k, v in result.items() if k not in ('root', 'config')},
-                         ensure_ascii=False, indent=2))
-        return result
-    if action == 'doctor':
-        return doctor(home, probe=yes)
     if action == 'install':
         if sys.platform not in ('win32', 'darwin'):
             raise OSError('WB-SC receiver hooks support Windows and macOS only')
-        if any(v for k, v in settings.get('enabledPlugins', {}).items() if k.startswith('workbuddy-status-led@')):
+        if agent == 'workbuddy' and any(v for k, v in settings.get('enabledPlugins', {}).items() if k.startswith('workbuddy-status-led@')):
             raise ValueError('Disable the old workbuddy-status-led plugin first to avoid duplicate hooks')
-        check_events_in_sync()
         # 款式默认 HM-AItest-1，但未确认：别人拿到的可能是别的排布，
         # 未确认时 key push --name 会拒绝，避免照着样机位置改错键。
         config_path = root / 'config.json'
-        config = load(config_path,
-                      {'vid': '1915', 'pid': '1025', 'path': None,
-                       'variant': 'HM-AItest-1', 'variant_confirmed': False})
+        config = load(config_path, {}) if config_path.exists() else load(
+            home / '.workbuddy/wb-sc/config.json',
+            {'vid': '1915', 'pid': '1025', 'path': None,
+             'variant': 'HM-AItest-1', 'variant_confirmed': False})
         validate_config(config)
-        if inspect(home, source)['ready']:
+        if inspect(home, source, agent, hook_file)['ready']:
             print('WB-SC hooks already current. Receiver config: %s' % config_path)
             return
         python = select_python(home)
-        command = hook_command(root, python)
-        managed.add(command)
+        registrations = hook_profiles.registrations(agent, lambda args: hook_command(root, python, args))
+        managed.update(hook_profiles.command_of(h) for _, _, h in hook_profiles.entries({'hooks': registrations}))
         payload = {root / 'runtime' / f: (source / f).read_bytes() for f in runtime_files()}
         for name, digest in manifest.get('hashes', {}).items():
             if name in FILES + MAC_FILES and name not in runtime_files():
@@ -219,11 +234,14 @@ def operate(action, yes=False, home=None, source=None):
         if not config_path.exists():
             payload[config_path] = encode(config)
         settings = without_owned(settings, managed)
-        for event in EVENTS:
-            settings.setdefault('hooks', {}).setdefault(event, []).append(
-                {'hooks': [{'type': 'command', 'command': command, 'timeout': 6}]})
+        if agent in ('cursor', 'copilot', 'copilot-local', 'trae'):
+            if settings.get('version', 1) != 1:
+                raise ValueError('Unsupported hook configuration version')
+            settings['version'] = 1
+        for event, groups in registrations.items():
+            settings.setdefault('hooks', {}).setdefault(event, []).extend(groups)
         payload[manifest_path] = encode({'version': VERSION, 'platform': sys.platform,
-            'commands': [command], 'python': python,
+            'agent': agent, 'commands': sorted(managed), 'python': python,
             'hashes': {f: hashlib.sha256(payload[root / 'runtime' / f]).hexdigest() for f in runtime_files()}})
     else:
         settings = without_owned(settings, managed)
@@ -251,7 +269,7 @@ def operate(action, yes=False, home=None, source=None):
     try:
         for path, data in payload.items():
             if path == settings_path and (path.read_bytes() if path.exists() else None) != settings_before:
-                raise OSError('WorkBuddy settings changed during installation; retry')
+                raise OSError('Host settings changed during installation; retry')
             if data is None:
                 path.unlink(missing_ok=True)
             else:
@@ -264,10 +282,12 @@ def operate(action, yes=False, home=None, source=None):
             else:
                 atomic(path, snapshots[path])
         raise
-    print('%s completed. Receiver config: %s' % (action, root / 'config.json'))
+    print('%s completed for %s. Receiver config: %s' % (action, agent, root / 'config.json'))
+    if action == 'install' and activation_note(agent):
+        print(activation_note(agent))
 
 
-def doctor(home=None, probe=False):
+def doctor(home=None, probe=False, agent='workbuddy', hook_file=None):
     """逐项自检，输出 ok/warn/fail 与下一步。其他用户拿到设备先跑这一条。"""
     from types import SimpleNamespace
 
@@ -282,8 +302,8 @@ def doctor(home=None, probe=False):
     supported = sys.platform == 'darwin' or os.name == 'nt'
     say('ok' if supported else 'fail', '平台：%s（支持 Windows/macOS）' % sys.platform)
 
-    state = inspect(home)
-    hook_python = load(state['root'] / 'installed.json', {}).get('python')
+    state = inspect(home, agent=agent, hook_file=hook_file)
+    hook_python = state['python']
     if not state['python_ready']:
         try:
             hook_python = select_python(home)
@@ -297,12 +317,15 @@ def doctor(home=None, probe=False):
         say('ok' if hook_python else 'fail', 'HIDAPI：随 Hook Python 检查；缺失时用该 Python -m pip install hidapi==0.15.0')
 
     if state['ready']:
-        say('ok', 'Hook 已安装：版本 %s，%d/%d 事件' % (state['version'], len(state['events']), len(EVENTS)))
+        say('ok', 'Hook 已安装：版本 %s，%d/%d 事件' % (state['version'], len(state['events']), len(hook_profiles.PROFILES[agent][1])))
     elif state['version']:
         say('warn', 'Hook 版本 %s，事件 %d/%d；建议重跑 remote install --yes'
-            % (state['version'], len(state['events']), len(EVENTS)))
+            % (state['version'], len(state['events']), len(hook_profiles.PROFILES[agent][1])))
     else:
         say('warn', 'Hook 未安装：跑 remote install --yes')
+
+    if state['activation_required']:
+        say('warn', state['activation_required'])
 
     config = {}
     try:
@@ -395,7 +418,7 @@ def doctor(home=None, probe=False):
 
 def execute(args):
     try:
-        result = operate(args.action, args.yes)
+        result = operate(args.action, args.yes, agent=args.agent, hook_file=args.hook_file)
         return result if isinstance(result, int) else 0
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         print('WB-SC setup: %s' % exc, file=sys.stderr)
@@ -410,6 +433,9 @@ def configure(parser):
                             ('doctor', '逐项自检：平台/Python/Hook/款式/接收器/固件'),
                             ('uninstall', '卸载本安装器写入的 Hook 与脚本')):
         p = sub.add_parser(name, help=help_text)
+        p.add_argument('--agent', choices=tuple(hook_profiles.PROFILES), default='workbuddy',
+                       help='由当前 agent 按 skill 选择；省略仅兼容旧 WorkBuddy 调用')
+        p.add_argument('--hook-file', type=Path, help='当前宿主实际使用的 Hook 文件')
         p.add_argument('--yes', action='store_true')
         p.set_defaults(func=execute)
     return sub
